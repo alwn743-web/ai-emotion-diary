@@ -185,13 +185,25 @@ document.addEventListener('DOMContentLoaded', () => {
        ========================================================================== */
 
     async function callVercelAnalyzeAPI(userDiaryText) {
-        const response = await fetch('/api/analyze', {
+        // Attempt POST to /api/analyze (Vercel canonical route)
+        let response = await fetch('/api/analyze', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({ text: userDiaryText })
-        });
+        }).catch(() => null);
+
+        // Fallback to /api/analyze.js if direct route is required by environment
+        if (!response || !response.ok) {
+            response = await fetch('/api/analyze.js', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ text: userDiaryText })
+            });
+        }
 
         const data = await response.json().catch(() => ({}));
 
