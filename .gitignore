@@ -1,0 +1,7 @@
+# Sensitive environment variables
+.env
+
+# System & Log files
+*.log
+.DS_Store
+Thumbs.db

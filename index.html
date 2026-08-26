@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 감정 일기 - 오늘의 하루는 어땠나요?</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Background Ambient Glows -->
+        <div class="ambient-glow glow-1"></div>
+        <div class="ambient-glow glow-2"></div>
+
+        <!-- App Header -->
+        <header class="app-header">
+            <div class="brand-badge">
+                <span class="sparkle-icon">✨</span> AI Emotion Care
+            </div>
+            <h1 class="main-title">오늘의 하루는 어땠나요?</h1>
+            <p class="sub-title">마음속에 담아둔 당신의 소중한 이야기와 감정을 편하게 나누어 보세요.</p>
+            <div class="date-badge" id="currentDateBadge">
+                📅 <span id="currentDateText">2026년 8월 26일 수요일</span>
+            </div>
+        </header>
+
+        <!-- Main Content Grid -->
+        <main class="main-card">
+            <!-- Input Section -->
+            <section class="input-section">
+                <div class="section-label">
+                    <label for="diaryInput" class="label-title">📝 오늘의 일기 작성하기</label>
+                    <span class="char-count" id="charCounter">0자</span>
+                </div>
+
+                <div class="textarea-wrapper">
+                    <textarea id="diaryInput"
+                        placeholder="오늘 있었던 일, 느꼈던 감정을 자유롭게 적어보세요. (예: 오늘 프로젝트 발표가 끝나서 홀가분하면서도 살짝 아쉬웠다.)"
+                        rows="7"></textarea>
+
+                    <!-- Voice Mic Active Banner -->
+                    <div class="voice-status" id="voiceStatus" style="display: none;">
+                        <span class="mic-wave"></span>
+                        <span id="voiceStatusText">음성을 듣고 있습니다... 말씀해 주세요!</span>
+                    </div>
+                </div>
+
+                <!-- Quick Emotion Chips (Optional Prompts) -->
+                <div class="prompt-chips">
+                    <span class="chip-label">💡 추천 키워드:</span>
+                    <button type="button" class="chip-btn" data-text="오늘 정말 보람차고 기분 좋은 하루였어. ">😊 기쁨</button>
+                    <button type="button" class="chip-btn" data-text="조금 피곤하고 마음이 지친 날이었어. ">😮‍💨 피로</button>
+                    <button type="button" class="chip-btn" data-text="앞으로의 일 때문에 마음이 불안하고 걱정돼. ">😟 불안</button>
+                    <button type="button" class="chip-btn" data-text="주변 사람들에게 감사함을 깊이 느낀 하루야. ">🥰 감사</button>
+                    <button type="button" class="chip-btn" data-text="혼자 조용히 생각에 잠기는 평온한 날이었어. ">🌿 평온</button>
+                </div>
+
+                <!-- Action Buttons Area -->
+                <div class="button-group">
+                    <button type="button" class="btn btn-voice" id="voiceBtn">
+                        <span class="btn-icon">🎙️</span>
+                        <span class="btn-text" id="voiceBtnText">음성으로 입력하기</span>
+                    </button>
+
+                    <button type="button" class="btn btn-analyze" id="analyzeBtn">
+                        <span class="btn-icon">✨</span>
+                        <span class="btn-text">분석 요청하기</span>
+                    </button>
+                </div>
+            </section>
+
+            <hr class="divider">
+
+            <!-- Result Section -->
+            <section class="result-section">
+                <div class="result-header">
+                    <h2 class="result-title">
+                        <span class="title-icon">🤖</span> 시의 답변 (AI의 답변)
+                    </h2>
+                    <span class="status-badge" id="aiStatusBadge">대기 중</span>
+                </div>
+
+                <!-- AI Response Gray Box Container -->
+                <div class="response-box" id="responseBox">
+                    <p class="placeholder-text" id="placeholderText">
+                        여기에 AI의 답변이 표시됩니다.
+                    </p>
+
+                    <!-- Dynamic Content Container (Hidden initially) -->
+                    <div class="response-content" id="responseContent" style="display: none;">
+                        <!-- Emotion Tags -->
+                        <div class="emotion-summary" id="emotionSummary">
+                            <span class="emotion-pill" id="primaryEmotionPill">감정: 분석 완료</span>
+                            <span class="score-pill" id="scorePill">마음 에너지: 85%</span>
+                        </div>
+
+                        <!-- AI Main Response Text -->
+                        <div class="ai-text-body" id="aiTextBody">
+                            <!-- Filled dynamically -->
+                        </div>
+
+                        <!-- Warm Quote / Advice Card -->
+                        <div class="quote-box" id="quoteBox">
+                            <span class="quote-mark">“</span>
+                            <span id="quoteText">오늘 하루도 정말 수고 많으셨어요. 당신의 노력은 결코 헛되지 않습니다.</span>
+                        </div>
+
+                        <!-- Recommended Healing -->
+                        <div class="recommendation-card" id="recommendationCard">
+                            <div class="rec-header">🌱 오늘의 추천 힐링</div>
+                            <div class="rec-detail" id="recDetail">따뜻한 차 한 잔과 함께 깊은 숨을 내쉬어 보세요.</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Past Entries History Container -->
+        <section class="history-container" id="historySection" style="display: none;">
+            <div class="history-header">
+                <h3>📚 나의 일기 기록 (<span id="historyCount">0</span>)</h3>
+                <button type="button" class="btn-clear-history" id="clearHistoryBtn">전체 삭제</button>
+            </div>
+            <div class="history-list" id="historyList">
+                <!-- Dynamically populated past diaries -->
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>© 2026 AI 감정 일기 (AI Emotion Care) • 따뜻한 마음 케어 서비스</p>
+        </footer>
+    </div>
+
+    <script src="env.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
