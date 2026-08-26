@@ -181,72 +181,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     /* ==========================================================================
-       4. Gemini API & Emotion Analysis Logic
+       4. Backend Vercel Serverless API (/api/analyze) Integration
        ========================================================================== */
 
-    // Load GEMINI_API_KEY from .env file
-    async function loadGeminiApiKey() {
-        if (window.GEMINI_API_KEY && window.GEMINI_API_KEY !== 'your_gemini_api_key_here') {
-            return window.GEMINI_API_KEY;
+    async function callVercelAnalyzeAPI(userDiaryText) {
+        const response = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ text: userDiaryText })
+        });
+
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || `[Vercel Serverless Error] HTTP ${response.status}`);
         }
 
-        try {
-            const response = await fetch('.env');
-            if (response.ok) {
-                const text = await response.text();
-                const match = text.match(/GEMINI_API_KEY\s*=\s*(.+)/);
-                if (match && match[1]) {
-                    const key = match[1].trim();
-                    if (key && key !== 'your_gemini_api_key_here') {
-                        return key;
-                    }
-                }
-            }
-        } catch (err) {
-            console.warn('.env 파일 로드 중 알림 (CORS 또는 파일 서버 필요):', err);
-        }
-        return null;
-    }
-
-    // Call Gemini API (Current Valid Flash Model)
-    async function callGeminiAPI(userDiaryText, apiKey) {
-        const promptText = `너는 심리 상담가야. 사용자가 작성한 일기 내용을 읽고, 사용자의 감정을 한 단어(예: 기쁨, 슬픔, 분노, 불안, 평온)로 요약해줘. 그리고 그 감정에 공감해주고, 따뜻한 응원의 메시지를 2~3문장으로 작성해줘. 답변 형식은 반드시 '감정: [요약된 감정]\n\n[응원 메시지]' 와 같이 줄바꿈을 포함해서 보내줘.\n\n[사용자의 일기 내용]\n${userDiaryText}`;
-
-        // Verified current available Flash models for generateContent
-        const models = ['gemini-3.5-flash', 'gemini-3.6-flash', 'gemini-flash-latest'];
-        let lastError = null;
-
-        for (const model of models) {
-            try {
-                const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-                const response = await fetch(endpoint, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{ text: promptText }]
-                        }]
-                    })
-                });
-
-                if (!response.ok) {
-                    const errData = await response.json().catch(() => ({}));
-                    throw new Error(errData.error?.message || `[${model}] HTTP ${response.status} Error`);
-                }
-
-                const data = await response.json();
-                const replyText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-                if (replyText) {
-                    return replyText;
-                }
-            } catch (err) {
-                console.warn(`${model} API 호출 시도 실패:`, err);
-                lastError = err;
-            }
-        }
-
-        throw lastError || new Error('Gemini API 응답을 가져올 수 없습니다.');
+        return data.result;
     }
 
     analyzeBtn.addEventListener('click', async () => {
@@ -266,24 +219,11 @@ document.addEventListener('DOMContentLoaded', () => {
         setLoadingState(true);
 
         try {
-            let apiKey = await loadGeminiApiKey();
-
-            if (!apiKey) {
-                apiKey = prompt('Gemini API 키가 설정되지 않았습니다. API 키를 입력해 주세요:');
-                if (apiKey) {
-                    window.GEMINI_API_KEY = apiKey.trim();
-                } else {
-                    alert('API 키가 없어 Gemini API를 호출할 수 없습니다.');
-                    setLoadingState(false);
-                    return;
-                }
-            }
-
-            // Directly call Gemini API without local engine fallback
-            const apiReply = await callGeminiAPI(text, apiKey);
+            // Call Vercel Backend Serverless API
+            const apiReply = await callVercelAnalyzeAPI(text);
             displayGeminiResponse(apiReply, text);
         } catch (error) {
-            console.error('Gemini API Error:', error);
+            console.error('Vercel API Error:', error);
             displayGeminiError(error.message);
         }
     });

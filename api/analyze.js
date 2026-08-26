@@ -22,21 +22,32 @@ export default async function handler(req, res) {
 
     // Only allow POST method for analysis
     if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method Not Allowed. Please use POST.' });
+        return res.status(405).json({ success: false, error: 'Method Not Allowed. Please use POST.' });
     }
 
     try {
-        const { text } = req.body || {};
-
-        if (!text || typeof text !== 'string' || !text.trim()) {
-            return res.status(400).json({ error: '분석할 일기 내용(text)을 입력해 주세요.' });
+        // Parse request body safely
+        let bodyData = req.body;
+        if (typeof req.body === 'string') {
+            try {
+                bodyData = JSON.parse(req.body);
+            } catch (e) {
+                bodyData = {};
+            }
         }
 
-        // Retrieve GEMINI_API_KEY from environment variables
+        const text = bodyData?.text;
+
+        if (!text || typeof text !== 'string' || !text.trim()) {
+            return res.status(400).json({ success: false, error: '분석할 일기 내용(text)을 입력해 주세요.' });
+        }
+
+        // Retrieve GEMINI_API_KEY strictly from Vercel Serverless environment variable
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             return res.status(500).json({ 
-                error: '서버 환경변수에 GEMINI_API_KEY가 설정되지 않았습니다. Vercel 대시보드에서 환경변수를 등록해 주세요.' 
+                success: false,
+                error: 'Vercel 서버 환경변수에 GEMINI_API_KEY가 설정되지 않았습니다. Vercel 대시보드 Settings -> Environment Variables에서 등록해 주세요.' 
             });
         }
 
@@ -75,10 +86,10 @@ export default async function handler(req, res) {
         }
 
         if (!replyText) {
-            throw lastError || new Error('Gemini API 응답을 가져오지 못했습니다.');
+            throw lastError || new Error('Gemini API로부터 답변을 응답받지 못했습니다.');
         }
 
-        // Return successful analysis response
+        // Return successful analysis response to frontend
         return res.status(200).json({ 
             success: true, 
             result: replyText 
