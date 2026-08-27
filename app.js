@@ -171,16 +171,29 @@ document.addEventListener('DOMContentLoaded', () => {
     // Google OAuth Login Event Handler
     if (googleLoginBtn) {
         googleLoginBtn.addEventListener('click', async () => {
-            if (supabase) {
-                const { error } = await supabase.auth.signInWithOAuth({
+            if (!supabase) {
+                showAuthMessage('Supabase 클라이언트가 로드되지 않았습니다.');
+                return;
+            }
+
+            try {
+                googleLoginBtn.disabled = true;
+                showAuthMessage('Google 인증 페이지로 이동 중입니다...', true);
+
+                const { data, error } = await supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
-                        redirectTo: window.location.href
+                        redirectTo: window.location.origin
                     }
                 });
+
                 if (error) {
-                    showAuthMessage(error.message || 'Google 로그인 중 오류가 발생했습니다.');
+                    googleLoginBtn.disabled = false;
+                    showAuthMessage(error.message || 'Google 로그인 진행 중 오류가 발생했습니다.');
                 }
+            } catch (err) {
+                googleLoginBtn.disabled = false;
+                showAuthMessage(err.message || 'Google 로그인 처리 중 오류가 발생했습니다.');
             }
         });
     }
