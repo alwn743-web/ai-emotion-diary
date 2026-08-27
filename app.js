@@ -875,8 +875,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     /* ==========================================================================
-       6. Supabase Messages Table & Realtime Broadcast Chat
+       6. Supabase Realtime Database Subscription & Chat History
        ========================================================================== */
+    const renderedMsgSet = new Set();
+
     async function loadChatHistoryFromSupabase() {
         if (!supabase) return;
         try {
@@ -884,24 +886,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 .from('massages')
                 .select('*')
                 .order('created_at', { ascending: true })
-                .limit(50);
+                .limit(100);
 
             if (error && error.code === 'PGRST205') {
                 const res2 = await supabase
                     .from('messages')
                     .select('*')
                     .order('created_at', { ascending: true })
-                    .limit(50);
+                    .limit(100);
                 data = res2.data;
                 error = res2.error;
             }
 
             if (!error && Array.isArray(data)) {
+                chatMessagesList.innerHTML = '<div class="chat-system-msg">💬 감정을 나누는 실시간 대화 공간에 입장하셨습니다.</div>';
+                renderedMsgSet.clear();
+
                 data.forEach(row => {
                     appendChatMessage({
                         id: row.id,
                         userId: row.user_id,
-                        email: row.user_email,
+                        email: row.user_email || row.email,
                         message: row.content || row.conent || '',
                         timestamp: row.created_at
                     });
@@ -920,16 +925,35 @@ document.addEventListener('DOMContentLoaded', () => {
             chatChannel = null;
         }
 
-        // Subscribe to Supabase Realtime Broadcast Channel
-        chatChannel = supabase.channel('global-emotion-chat', {
-            config: { broadcast: { self: true } }
-        });
-
-        chatChannel.on('broadcast', { event: 'chat-msg' }, (payload) => {
-            if (payload && payload.payload) {
-                appendChatMessage(payload.payload, user.id);
-            }
-        });
+        // 1) Subscribe to Supabase Postgres INSERT changes for 'massages' and 'messages' tables
+        chatChannel = supabase.channel('realtime-db-messages-channel')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'massages' }, (payload) => {
+                if (payload && payload.new) {
+                    appendChatMessage({
+                        id: payload.new.id,
+                        userId: payload.new.user_id,
+                        email: payload.new.user_email || payload.new.email,
+                        message: payload.new.content || payload.new.conent || '',
+                        timestamp: payload.new.created_at
+                    }, user.id);
+                }
+            })
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+                if (payload && payload.new) {
+                    appendChatMessage({
+                        id: payload.new.id,
+                        userId: payload.new.user_id,
+                        email: payload.new.user_email || payload.new.email,
+                        message: payload.new.content || payload.new.conent || '',
+                        timestamp: payload.new.created_at
+                    }, user.id);
+                }
+            })
+            .on('broadcast', { event: 'chat-msg' }, (payload) => {
+                if (payload && payload.payload) {
+                    appendChatMessage(payload.payload, user.id);
+                }
+            });
 
         chatChannel.subscribe((status) => {
             const onlineBadge = document.getElementById('chatOnlineBadge');
@@ -940,7 +964,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Load existing chat history from Supabase table
+        // 3) Preload existing chat history on page open
         loadChatHistoryFromSupabase();
     }
 
@@ -991,7 +1015,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // 2. Clear input box on message send attempt
             chatInput.value = '';
 
-            // 3. Broadcast message to all connected clients in real time
+            // 3. Broadcast message to connected clients
             if (chatChannel) {
                 const msgPayload = {
                     id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
@@ -1014,22 +1038,29 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function appendChatMessage(msgData, myUserId) {
-        if (!msgData || !msgData.message || !chatMessagesList) return;
+        const messageText = msgData?.message || msgData?.content;
+        if (!msgData || !messageText || !chatMessagesList) return;
 
-        const isMine = (msgData.userId === (myUserId || currentUserId));
+        // Deduplicate rendered messages by ID or payload key
+        const msgKey = msgData.id ? `id_${msgData.id}` : `raw_${msgData.timestamp}_${msgData.email}_${messageText}`;
+        if (renderedMsgSet.has(msgKey)) return;
+        renderedMsgSet.add(msgKey);
+
+        const currentEmail = userEmailText ? userEmailText.textContent.trim() : '';
+        const isMine = (msgData.userId === (myUserId || currentUserId)) || (msgData.email && msgData.email === currentEmail);
 
         const dateStr = msgData.timestamp 
             ? new Date(msgData.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
             : '';
 
-        const senderEmail = msgData.email ? msgData.email.split('@')[0] + '***' : '익명';
+        const fullEmail = msgData.email || '익명 사용자';
 
         const msgDiv = document.createElement('div');
         msgDiv.className = `chat-msg ${isMine ? 'mine' : 'other'}`;
         
         msgDiv.innerHTML = `
-            ${!isMine ? `<div class="chat-msg-sender">👤 ${escapeHtml(senderEmail)}</div>` : ''}
-            <div class="chat-msg-bubble">${escapeHtml(msgData.message)}</div>
+            <div class="chat-msg-sender">${isMine ? '나' : `✉️ ${escapeHtml(fullEmail)}`}</div>
+            <div class="chat-msg-bubble">${escapeHtml(messageText)}</div>
             <div class="chat-msg-time">${dateStr}</div>
         `;
 
