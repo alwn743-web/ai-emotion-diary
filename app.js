@@ -88,6 +88,15 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Auth Form Enter Key Submit Handler
+    const authForm = document.getElementById('authForm');
+    if (authForm) {
+        authForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (loginBtn) loginBtn.click();
+        });
+    }
+
     // Email Login Event Handler
     if (loginBtn) {
         loginBtn.addEventListener('click', async () => {
