@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize App Settings
     initCurrentDate();
     initSpeechRecognition();
-    renderHistory();
+    loadHistoryFromRedis();
     restoreLatestEntry();
 
     /* ==========================================================================
