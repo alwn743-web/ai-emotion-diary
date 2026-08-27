@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     }
 
     try {
-        // 1. Verify User Token via Supabase Admin Client
+        // 1. Verify User Token via Supabase Client
         const authHeader = req.headers.authorization || req.headers['authorization'] || '';
         const token = authHeader.replace(/^Bearer\s+/i, '').trim();
 
@@ -42,16 +42,16 @@ export default async function handler(req, res) {
         }
 
         const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-        if (!supabaseUrl || !supabaseServiceKey) {
+        if (!supabaseUrl || !supabaseKey) {
             return res.status(500).json({
                 success: false,
-                error: '서버에 Supabase 설정 환경변수가 부족합니다.'
+                error: '서버에 Supabase 설정 환경변수(SUPABASE_URL / SUPABASE_ANON_KEY)가 부족합니다.'
             });
         }
 
-        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+        const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
             auth: { persistSession: false }
         });
 
