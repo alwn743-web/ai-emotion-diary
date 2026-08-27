@@ -31,33 +31,44 @@ export default async function handler(req, res) {
         const authHeader = req.headers.authorization || req.headers['authorization'] || '';
         const token = authHeader.replace(/^Bearer\s+/i, '').trim();
 
-        let userId = 'anonymous';
+        if (!token) {
+            return res.status(401).json({
+                success: false,
+                error: '로그인이 필요합니다. 인증 토큰이 없습니다.'
+            });
+        }
 
         const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
         const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-        if (token && supabaseUrl && supabaseServiceKey) {
-            const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-                auth: { persistSession: false }
+        if (!supabaseUrl || !supabaseServiceKey) {
+            return res.status(500).json({
+                success: false,
+                error: '서버에 Supabase 설정 환경변수가 부족합니다.'
             });
-
-            const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
-            if (authError || !user) {
-                return res.status(401).json({
-                    success: false,
-                    error: '유효하지 않거나 만료된 인증 토큰입니다. 다시 로그인해 주세요.'
-                });
-            }
-
-            userId = user.id;
         }
 
-        // 2. Fetch User-Isolated History List
+        const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+            auth: { persistSession: false }
+        });
+
+        const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+        if (authError || !user) {
+            return res.status(401).json({
+                success: false,
+                error: '유효하지 않거나 만료된 인증 토큰입니다. 다시 로그인해 주세요.'
+            });
+        }
+
+        const userId = user.id;
+
+        // 2. Fetch Strictly Logged-in User's History List from Redis
         const historyList = await fetchUserHistoryFromRedis(userId);
 
         return res.status(200).json({
             success: true,
             userId: userId,
+            userEmail: user.email,
             history: historyList
         });
     } catch (error) {
@@ -70,7 +81,7 @@ export default async function handler(req, res) {
 }
 
 /**
- * Fetch logged-in user's diary records from Serverless Redis
+ * Fetch logged-in user's diary records from Serverless Redis (Strictly user-isolated keys)
  */
 async function fetchUserHistoryFromRedis(userId) {
     const redisUrl = process.env.REDIS_URL;

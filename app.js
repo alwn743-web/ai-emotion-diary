@@ -63,10 +63,22 @@ document.addEventListener('DOMContentLoaded', () => {
             authCard.style.display = 'none';
             mainDiaryApp.style.display = 'flex';
             userEmailText.textContent = session.user.email || '로그인 사용자';
+
+            // Clear previous local input fields & response box before loading user data
+            diaryInput.value = '';
+            charCounter.textContent = '0자';
+            placeholderText.style.display = 'block';
+            placeholderText.innerHTML = '여기에 AI의 답변이 표시됩니다.';
+            responseContent.style.display = 'none';
+            responseBox.classList.remove('has-content');
+
             loadHistoryFromRedis();
         } else {
             authCard.style.display = 'flex';
             mainDiaryApp.style.display = 'none';
+            localStorage.clear();
+            historySection.style.display = 'none';
+            historyList.innerHTML = '';
         }
     }
 
