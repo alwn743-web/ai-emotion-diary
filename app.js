@@ -350,16 +350,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    async function getAuthHeader() {
+        if (supabase) {
+            try {
+                const { data: { session } } = await supabase.auth.getSession();
+                if (session && session.access_token) {
+                    return { 'Authorization': `Bearer ${session.access_token}` };
+                }
+            } catch (e) {
+                console.warn('Supabase 세션 토큰 가져오기 실패:', e);
+            }
+        }
+        return {};
+    }
+
     /* ==========================================================================
        4. Backend Vercel Serverless API (/api/analyze) Integration
        ========================================================================== */
 
     async function callVercelAnalyzeAPI(userDiaryText) {
+        const authHeaders = await getAuthHeader();
+
         // Attempt POST to /api/analyze (Vercel canonical route)
         let response = await fetch('/api/analyze', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...authHeaders
             },
             body: JSON.stringify({ text: userDiaryText })
         }).catch(() => null);
@@ -369,7 +386,8 @@ document.addEventListener('DOMContentLoaded', () => {
             response = await fetch('/api/analyze.js', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    ...authHeaders
                 },
                 body: JSON.stringify({ text: userDiaryText })
             });
@@ -678,9 +696,20 @@ document.addEventListener('DOMContentLoaded', () => {
        ========================================================================== */
     async function loadHistoryFromRedis() {
         try {
-            let response = await fetch('/api/history').catch(() => null);
+            const authHeaders = await getAuthHeader();
+
+            let response = await fetch('/api/history', {
+                headers: {
+                    ...authHeaders
+                }
+            }).catch(() => null);
+
             if (!response || !response.ok) {
-                response = await fetch('/api/history.js').catch(() => null);
+                response = await fetch('/api/history.js', {
+                    headers: {
+                        ...authHeaders
+                    }
+                }).catch(() => null);
             }
 
             if (!response || !response.ok) {

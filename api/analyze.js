@@ -1,11 +1,12 @@
 /**
- * Vercel Serverless Function - AI Emotion Analysis & Serverless Redis Persistence API
+ * Vercel Serverless Function - AI Emotion Analysis & User-Isolated Serverless Redis Persistence
  * File Path: /api/analyze.js
  * Endpoint: POST /api/analyze
  */
 
 import Redis from 'ioredis';
 import { Redis as UpstashRedis } from '@upstash/redis';
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
     // Enable CORS headers
@@ -14,7 +15,7 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
     res.setHeader(
         'Access-Control-Allow-Headers',
-        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
     );
 
     // Handle OPTIONS preflight request
@@ -29,7 +30,34 @@ export default async function handler(req, res) {
     }
 
     try {
-        // Parse request body safely
+        // 1. Verify User Token via Supabase Admin Client
+        const authHeader = req.headers.authorization || req.headers['authorization'] || '';
+        const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+        let userId = 'anonymous';
+        let userEmail = 'anonymous@user';
+
+        const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+        if (token && supabaseUrl && supabaseServiceKey) {
+            const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+                auth: { persistSession: false }
+            });
+
+            const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+            if (authError || !user) {
+                return res.status(401).json({
+                    success: false,
+                    error: '유효하지 않거나 만료된 인증 토큰입니다. 다시 로그인해 주세요.'
+                });
+            }
+
+            userId = user.id;
+            userEmail = user.email || user.id;
+        }
+
+        // 2. Parse request body safely
         let bodyData = req.body;
         if (typeof req.body === 'string') {
             try {
@@ -92,23 +120,26 @@ export default async function handler(req, res) {
             throw lastError || new Error('Gemini API로부터 답변을 응답받지 못했습니다.');
         }
 
-        // Generate unique entry ID based on current timestamp
+        // 3. Generate User-Isolated Entry Payload
         const timestamp = Date.now();
         const entryId = `diary_${timestamp}`;
         const recordPayload = {
             id: entryId,
+            userId: userId,
+            userEmail: userEmail,
             timestamp: new Date(timestamp).toISOString(),
             originalText: text.trim(),
             aiResponse: replyText
         };
 
-        // Save entry bundle to Serverless Redis (REDIS_URL)
-        await saveToServerlessRedis(recordPayload);
+        // Save entry bundle to Serverless Redis with User ID isolation
+        await saveUserIsolatedRedis(userId, recordPayload);
 
         // Return successful analysis response to frontend
         return res.status(200).json({ 
             success: true, 
             id: entryId,
+            userId: userId,
             result: replyText 
         });
 
@@ -122,30 +153,31 @@ export default async function handler(req, res) {
 }
 
 /**
- * Save diary input and AI response bundle to Serverless Redis
+ * Save diary record to Serverless Redis under user-isolated key
  */
-async function saveToServerlessRedis(record) {
+async function saveUserIsolatedRedis(userId, record) {
     const redisUrl = process.env.REDIS_URL;
     const restUrl = process.env.UPSTASH_REDIS_REST_URL;
     const restToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-    const redisKey = `diary:${record.id}`;
+    const redisKey = `user:${userId}:diary:${record.id}`;
+    const listKey = `user:${userId}:diary_list`;
     const serializedData = JSON.stringify(record);
 
-    // 1. Try Upstash HTTP REST SDK if REST URL & Token are configured
+    // 1. Try Upstash HTTP REST SDK
     if (restUrl && restToken) {
         try {
             const upstash = new UpstashRedis({ url: restUrl, token: restToken });
             await upstash.set(redisKey, serializedData);
-            await upstash.lpush('diary_list', redisKey);
-            console.log(`[Serverless Redis] Upstash REST 저장 성공: ${redisKey}`);
+            await upstash.lpush(listKey, redisKey);
+            console.log(`[User Redis] Upstash REST 저장 성공: ${redisKey}`);
             return;
         } catch (e) {
-            console.warn('[Serverless Redis] Upstash REST 저장 실패, REDIS_URL 시도:', e.message);
+            console.warn('[User Redis] Upstash REST 저장 실패, REDIS_URL 시도:', e.message);
         }
     }
 
-    // 2. Fallback to ioredis TCP connection string via REDIS_URL
+    // 2. Fallback to ioredis TCP connection
     if (redisUrl) {
         let redis = null;
         try {
@@ -155,10 +187,10 @@ async function saveToServerlessRedis(record) {
                 enableOfflineQueue: false
             });
             await redis.set(redisKey, serializedData);
-            await redis.lpush('diary_list', redisKey);
-            console.log(`[Serverless Redis] REDIS_URL 저장 성공: ${redisKey}`);
+            await redis.lpush(listKey, redisKey);
+            console.log(`[User Redis] REDIS_URL 저장 성공: ${redisKey}`);
         } catch (e) {
-            console.warn('[Serverless Redis] REDIS_URL 저장 실패 경고:', e.message);
+            console.warn('[User Redis] REDIS_URL 저장 실패 경고:', e.message);
         } finally {
             if (redis) {
                 try {
@@ -167,6 +199,6 @@ async function saveToServerlessRedis(record) {
             }
         }
     } else {
-        console.warn('[Serverless Redis] REDIS_URL 환경변수가 설정되지 않아 Redis 저장을 스킵합니다.');
+        console.warn('[User Redis] REDIS_URL 환경변수가 설정되지 않아 Redis 저장을 스킵합니다.');
     }
 }

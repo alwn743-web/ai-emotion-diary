@@ -1,18 +1,22 @@
 /**
- * Vercel Serverless Function - Get All Saved Diary History from Serverless Redis
+ * Vercel Serverless Function - Get Logged-in User's Diary History from Serverless Redis
  * File Path: /api/history.js
  * Endpoint: GET /api/history
  */
 
 import Redis from 'ioredis';
 import { Redis as UpstashRedis } from '@upstash/redis';
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
     // Enable CORS headers
     res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader(
+        'Access-Control-Allow-Headers',
+        'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+    );
 
     if (req.method === 'OPTIONS') {
         return res.status(200).end();
@@ -23,13 +27,41 @@ export default async function handler(req, res) {
     }
 
     try {
-        const historyList = await fetchHistoryFromRedis();
+        // 1. Verify User Token via Supabase Admin Client
+        const authHeader = req.headers.authorization || req.headers['authorization'] || '';
+        const token = authHeader.replace(/^Bearer\s+/i, '').trim();
+
+        let userId = 'anonymous';
+
+        const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+        if (token && supabaseUrl && supabaseServiceKey) {
+            const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+                auth: { persistSession: false }
+            });
+
+            const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+            if (authError || !user) {
+                return res.status(401).json({
+                    success: false,
+                    error: '유효하지 않거나 만료된 인증 토큰입니다. 다시 로그인해 주세요.'
+                });
+            }
+
+            userId = user.id;
+        }
+
+        // 2. Fetch User-Isolated History List
+        const historyList = await fetchUserHistoryFromRedis(userId);
+
         return res.status(200).json({
             success: true,
+            userId: userId,
             history: historyList
         });
     } catch (error) {
-        console.error('Vercel History API Error:', error);
+        console.error('Vercel User History API Error:', error);
         return res.status(500).json({
             success: false,
             error: error.message || '히스토리 목록을 가져오는 중 오류가 발생했습니다.'
@@ -38,26 +70,28 @@ export default async function handler(req, res) {
 }
 
 /**
- * Fetch all diary records from Serverless Redis (REDIS_URL or Upstash REST)
+ * Fetch logged-in user's diary records from Serverless Redis
  */
-async function fetchHistoryFromRedis() {
+async function fetchUserHistoryFromRedis(userId) {
     const redisUrl = process.env.REDIS_URL;
     const restUrl = process.env.UPSTASH_REDIS_REST_URL;
     const restToken = process.env.UPSTASH_REDIS_REST_TOKEN;
 
+    const listKey = `user:${userId}:diary_list`;
+    const scanPattern = `user:${userId}:diary:*`;
     let items = [];
 
-    // 1. Try Upstash REST SDK if REST URL & Token are configured
+    // 1. Try Upstash REST SDK
     if (restUrl && restToken) {
         try {
             const upstash = new UpstashRedis({ url: restUrl, token: restToken });
-            const listKeys = await upstash.lrange('diary_list', 0, -1);
+            const listKeys = await upstash.lrange(listKey, 0, -1);
             
             if (listKeys && listKeys.length > 0) {
                 const rawData = await Promise.all(listKeys.map(k => upstash.get(k)));
                 items = rawData.filter(Boolean).map(item => typeof item === 'string' ? JSON.parse(item) : item);
             } else {
-                const keys = await upstash.keys('diary:*');
+                const keys = await upstash.keys(scanPattern);
                 if (keys && keys.length > 0) {
                     const rawData = await Promise.all(keys.map(k => upstash.get(k)));
                     items = rawData.filter(Boolean).map(item => typeof item === 'string' ? JSON.parse(item) : item);
@@ -65,11 +99,11 @@ async function fetchHistoryFromRedis() {
             }
             return sortAndDeduplicate(items);
         } catch (e) {
-            console.warn('[Redis History] Upstash REST 조회 실패, REDIS_URL 시도:', e.message);
+            console.warn('[User Redis History] Upstash REST 조회 실패, REDIS_URL 시도:', e.message);
         }
     }
 
-    // 2. Fallback to ioredis TCP connection via REDIS_URL
+    // 2. Fallback to ioredis TCP connection
     if (redisUrl) {
         let redis = null;
         try {
@@ -79,12 +113,12 @@ async function fetchHistoryFromRedis() {
                 enableOfflineQueue: false
             });
 
-            const listKeys = await redis.lrange('diary_list', 0, -1);
+            const listKeys = await redis.lrange(listKey, 0, -1);
             if (listKeys && listKeys.length > 0) {
                 const rawValues = await redis.mget(...listKeys);
                 items = rawValues.filter(Boolean).map(raw => JSON.parse(raw));
             } else {
-                const keys = await redis.keys('diary:*');
+                const keys = await redis.keys(scanPattern);
                 if (keys && keys.length > 0) {
                     const rawValues = await redis.mget(...keys);
                     items = rawValues.filter(Boolean).map(raw => JSON.parse(raw));
@@ -92,7 +126,7 @@ async function fetchHistoryFromRedis() {
             }
             return sortAndDeduplicate(items);
         } catch (e) {
-            console.warn('[Redis History] ioredis 조회 실패:', e.message);
+            console.warn('[User Redis History] ioredis 조회 실패:', e.message);
         } finally {
             if (redis) {
                 try {
