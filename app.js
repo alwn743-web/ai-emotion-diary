@@ -153,7 +153,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (error) {
                     showAuthMessage(error.message || '회원가입 중 오류가 발생했습니다.');
                 } else {
-                    showAuthMessage('회원가입 신청이 완료되었습니다! 이메일 인증을 진행해 주세요.', true);
+                    showAuthMessage('가입 확인 이메일을 확인해주세요!', true);
                 }
             }
         });
