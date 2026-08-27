@@ -53,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // State Variables
     let isRecording = false;
     let recognition = null;
+    let currentUserId = null;
     let historyData = JSON.parse(localStorage.getItem('ai_diary_history') || '[]');
 
     /* ==========================================================================
@@ -60,23 +61,20 @@ document.addEventListener('DOMContentLoaded', () => {
        ========================================================================== */
     function updateAuthUI(session) {
         if (session && session.user) {
+            currentUserId = session.user.id;
             authCard.style.display = 'none';
             mainDiaryApp.style.display = 'flex';
             userEmailText.textContent = session.user.email || '로그인 사용자';
 
-            // Clear previous local input fields & response box before loading user data
-            diaryInput.value = '';
-            charCounter.textContent = '0자';
-            placeholderText.style.display = 'block';
-            placeholderText.innerHTML = '여기에 AI의 답변이 표시됩니다.';
-            responseContent.style.display = 'none';
-            responseBox.classList.remove('has-content');
+            // Restore user-scoped latest diary input and AI response
+            restoreLatestEntry(session.user.id);
 
+            // Load user-isolated history from Serverless Redis
             loadHistoryFromRedis();
         } else {
+            currentUserId = null;
             authCard.style.display = 'flex';
             mainDiaryApp.style.display = 'none';
-            localStorage.clear();
             historySection.style.display = 'none';
             historyList.innerHTML = '';
         }
@@ -229,30 +227,52 @@ document.addEventListener('DOMContentLoaded', () => {
        ========================================================================== */
     function saveLatestEntry(diaryText, aiResponseText) {
         try {
-            localStorage.setItem('latest_diary_input', diaryText);
-            localStorage.setItem('latest_ai_response', aiResponseText);
+            const uid = currentUserId || 'guest';
+            if (diaryText !== undefined && diaryText !== null) {
+                localStorage.setItem(`latest_diary_input_${uid}`, diaryText);
+            }
+            if (aiResponseText !== undefined && aiResponseText !== null) {
+                localStorage.setItem(`latest_ai_response_${uid}`, aiResponseText);
+            }
         } catch (err) {
             console.warn('LocalStorage 저장 실패:', err);
         }
     }
 
-    function restoreLatestEntry() {
+    function restoreLatestEntry(userId) {
         try {
-            const savedDiary = localStorage.getItem('latest_diary_input');
-            const savedAiResponse = localStorage.getItem('latest_ai_response');
+            const uid = userId || currentUserId || 'guest';
+            const savedDiary = localStorage.getItem(`latest_diary_input_${uid}`);
+            const savedAiResponse = localStorage.getItem(`latest_ai_response_${uid}`);
 
             if (savedDiary) {
                 diaryInput.value = savedDiary;
                 charCounter.textContent = `${savedDiary.length}자`;
+            } else {
+                diaryInput.value = '';
+                charCounter.textContent = '0자';
             }
 
             if (savedAiResponse) {
                 displayGeminiResponse(savedAiResponse, savedDiary || '', false);
+            } else {
+                placeholderText.style.display = 'block';
+                placeholderText.innerHTML = '여기에 AI의 답변이 표시됩니다.';
+                responseContent.style.display = 'none';
+                responseBox.classList.remove('has-content');
             }
         } catch (err) {
             console.warn('LocalStorage 복원 중 오류:', err);
         }
     }
+
+    // Auto-save draft on input typing
+    diaryInput.addEventListener('input', () => {
+        const text = diaryInput.value;
+        charCounter.textContent = `${text.length}자`;
+        const uid = currentUserId || 'guest';
+        localStorage.setItem(`latest_diary_input_${uid}`, text);
+    });
 
     /* ==========================================================================
        1. Date Display Initialization
