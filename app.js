@@ -3,6 +3,25 @@
  */
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize Supabase Browser Client
+    let supabase = null;
+    if (window.supabase && window.ENV && window.ENV.SUPABASE_URL) {
+        supabase = window.supabase.createClient(window.ENV.SUPABASE_URL, window.ENV.SUPABASE_ANON_KEY);
+    }
+
+    // Auth UI Elements Selection
+    const authCard = document.getElementById('authCard');
+    const mainDiaryApp = document.getElementById('mainDiaryApp');
+    const authEmail = document.getElementById('authEmail');
+    const authPassword = document.getElementById('authPassword');
+    const authMessage = document.getElementById('authMessage');
+    const loginBtn = document.getElementById('loginBtn');
+    const signUpBtn = document.getElementById('signUpBtn');
+    const googleLoginBtn = document.getElementById('googleLoginBtn');
+    const userBar = document.getElementById('userBar');
+    const userEmailText = document.getElementById('userEmailText');
+    const logoutBtn = document.getElementById('logoutBtn');
+
     // UI Elements Selection
     const diaryInput = document.getElementById('diaryInput');
     const charCounter = document.getElementById('charCounter');
@@ -36,10 +55,139 @@ document.addEventListener('DOMContentLoaded', () => {
     let recognition = null;
     let historyData = JSON.parse(localStorage.getItem('ai_diary_history') || '[]');
 
+    /* ==========================================================================
+       Auth State Listener & View Switcher
+       ========================================================================== */
+    function updateAuthUI(session) {
+        if (session && session.user) {
+            authCard.style.display = 'none';
+            mainDiaryApp.style.display = 'flex';
+            userEmailText.textContent = session.user.email || '로그인 사용자';
+            loadHistoryFromRedis();
+        } else {
+            authCard.style.display = 'flex';
+            mainDiaryApp.style.display = 'none';
+        }
+    }
+
+    function showAuthMessage(msg, isSuccess = false) {
+        authMessage.style.display = 'block';
+        authMessage.textContent = msg;
+        authMessage.className = `auth-message ${isSuccess ? 'success' : 'error'}`;
+    }
+
+    if (supabase) {
+        // Initial session check
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            updateAuthUI(session);
+        });
+
+        // Listen for Auth changes
+        supabase.auth.onAuthStateChange((_event, session) => {
+            updateAuthUI(session);
+        });
+    }
+
+    // Email Login Event Handler
+    if (loginBtn) {
+        loginBtn.addEventListener('click', async () => {
+            const email = authEmail.value.trim();
+            const password = authPassword.value.trim();
+
+            if (!email || !password) {
+                showAuthMessage('이메일과 비밀번호를 모두 입력해 주세요.');
+                return;
+            }
+
+            if (supabase) {
+                loginBtn.disabled = true;
+                loginBtn.textContent = '로그인 중...';
+
+                const { data, error } = await supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
+
+                loginBtn.disabled = false;
+                loginBtn.textContent = '로그인';
+
+                if (error) {
+                    showAuthMessage(error.message || '로그인 중 오류가 발생했습니다.');
+                } else {
+                    showAuthMessage('로그인 성공! 환영합니다.', true);
+                }
+            } else {
+                showAuthMessage('Supabase 클라이언트 연결 실패.');
+            }
+        });
+    }
+
+    // Email Sign Up Event Handler
+    if (signUpBtn) {
+        signUpBtn.addEventListener('click', async () => {
+            const email = authEmail.value.trim();
+            const password = authPassword.value.trim();
+
+            if (!email || !password) {
+                showAuthMessage('회원가입할 이메일과 비밀번호를 입력해 주세요.');
+                return;
+            }
+
+            if (password.length < 6) {
+                showAuthMessage('비밀번호는 최소 6자 이상이어야 합니다.');
+                return;
+            }
+
+            if (supabase) {
+                signUpBtn.disabled = true;
+                signUpBtn.textContent = '가입 처리 중...';
+
+                const { data, error } = await supabase.auth.signUp({
+                    email: email,
+                    password: password
+                });
+
+                signUpBtn.disabled = false;
+                signUpBtn.textContent = '회원가입';
+
+                if (error) {
+                    showAuthMessage(error.message || '회원가입 중 오류가 발생했습니다.');
+                } else {
+                    showAuthMessage('회원가입 신청이 완료되었습니다! 이메일 인증을 진행해 주세요.', true);
+                }
+            }
+        });
+    }
+
+    // Google OAuth Login Event Handler
+    if (googleLoginBtn) {
+        googleLoginBtn.addEventListener('click', async () => {
+            if (supabase) {
+                const { error } = await supabase.auth.signInWithOAuth({
+                    provider: 'google',
+                    options: {
+                        redirectTo: window.location.href
+                    }
+                });
+                if (error) {
+                    showAuthMessage(error.message || 'Google 로그인 중 오류가 발생했습니다.');
+                }
+            }
+        });
+    }
+
+    // Logout Event Handler
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            if (supabase) {
+                await supabase.auth.signOut();
+            }
+        });
+    }
+
     // Initialize App Settings
     initCurrentDate();
     initSpeechRecognition();
-    loadHistoryFromRedis();
     restoreLatestEntry();
 
     /* ==========================================================================

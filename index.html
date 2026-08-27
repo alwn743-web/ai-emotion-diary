@@ -11,6 +11,8 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap"
         rel="stylesheet">
+    <!-- Supabase JS Client SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -20,119 +22,180 @@
         <div class="ambient-glow glow-1"></div>
         <div class="ambient-glow glow-2"></div>
 
-        <!-- App Header -->
-        <header class="app-header">
-            <div class="brand-badge">
-                <span class="sparkle-icon">✨</span> AI Emotion Care
+        <!-- ==========================================================================
+             1. Login / Sign-up Screen (Shown when NOT logged in)
+             ========================================================================== -->
+        <div class="auth-card" id="authCard">
+            <div class="auth-header">
+                <div class="brand-badge">
+                    <span class="sparkle-icon">✨</span> AI Emotion Care
+                </div>
+                <h1 class="auth-title">AI 감정 일기</h1>
+                <p class="auth-subtitle">소중한 하루를 기록하고 마음의 안식을 찾아보세요.</p>
             </div>
-            <h1 class="main-title">오늘의 하루는 어땠나요?</h1>
-            <p class="sub-title">마음속에 담아둔 당신의 소중한 이야기와 감정을 편하게 나누어 보세요.</p>
-            <div class="date-badge" id="currentDateBadge">
-                📅 <span id="currentDateText">2026년 8월 26일 수요일</span>
-            </div>
-        </header>
 
-        <!-- Main Content Grid -->
-        <main class="main-card">
-            <!-- Input Section -->
-            <section class="input-section">
-                <div class="section-label">
-                    <label for="diaryInput" class="label-title">📝 오늘의 일기 작성하기</label>
-                    <span class="char-count" id="charCounter">0자</span>
+            <form class="auth-form" id="authForm" onsubmit="return false;">
+                <div class="form-group">
+                    <label for="authEmail" class="form-label">이메일 주소</label>
+                    <input type="email" id="authEmail" class="form-input" placeholder="example@email.com" required autocomplete="email">
                 </div>
 
-                <div class="textarea-wrapper">
-                    <textarea id="diaryInput"
-                        placeholder="오늘 있었던 일, 느꼈던 감정을 자유롭게 적어보세요. (예: 오늘 프로젝트 발표가 끝나서 홀가분하면서도 살짝 아쉬웠다.)"
-                        rows="7"></textarea>
+                <div class="form-group">
+                    <label for="authPassword" class="form-label">비밀번호</label>
+                    <input type="password" id="authPassword" class="form-input" placeholder="비밀번호를 입력해 주세요 (6자 이상)" required autocomplete="current-password" minlength="6">
+                </div>
 
-                    <!-- Voice Mic Active Banner -->
-                    <div class="voice-status" id="voiceStatus" style="display: none;">
-                        <span class="mic-wave"></span>
-                        <span id="voiceStatusText">음성을 듣고 있습니다... 말씀해 주세요!</span>
+                <!-- Status / Error Feedback Message -->
+                <div class="auth-message" id="authMessage" style="display: none;"></div>
+
+                <div class="auth-btn-group">
+                    <button type="button" class="btn btn-login" id="loginBtn">로그인</button>
+                    <button type="button" class="btn btn-signup" id="signUpBtn">회원가입</button>
+                </div>
+            </form>
+
+            <div class="auth-divider">
+                <span>또는</span>
+            </div>
+
+            <button type="button" class="btn btn-google" id="googleLoginBtn">
+                <svg class="google-icon" width="18" height="18" viewBox="0 0 18 18">
+                    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.616z"/>
+                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/>
+                    <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958l3.007 2.332C4.672 5.164 6.656 3.58 9 3.58z"/>
+                </svg>
+                <span>Google로 로그인</span>
+            </button>
+        </div>
+
+        <!-- ==========================================================================
+             2. Main Diary App Screen (Shown ONLY when logged in)
+             ========================================================================== -->
+        <div class="main-app-wrapper" id="mainDiaryApp" style="display: none;">
+            <!-- Top User Profile & Logout Bar -->
+            <div class="user-bar" id="userBar">
+                <div class="user-info">
+                    <span class="user-avatar">👤</span>
+                    <span class="user-email" id="userEmailText">user@example.com</span>
+                </div>
+                <button type="button" class="btn-logout" id="logoutBtn">로그아웃</button>
+            </div>
+
+            <!-- App Header -->
+            <header class="app-header">
+                <div class="brand-badge">
+                    <span class="sparkle-icon">✨</span> AI Emotion Care
+                </div>
+                <h1 class="main-title">오늘의 하루는 어땠나요?</h1>
+                <p class="sub-title">마음속에 담아둔 당신의 소중한 이야기와 감정을 편하게 나누어 보세요.</p>
+                <div class="date-badge" id="currentDateBadge">
+                    📅 <span id="currentDateText">2026년 8월 26일 수요일</span>
+                </div>
+            </header>
+
+            <!-- Main Content Grid -->
+            <main class="main-card">
+                <!-- Input Section -->
+                <section class="input-section">
+                    <div class="section-label">
+                        <label for="diaryInput" class="label-title">📝 오늘의 일기 작성하기</label>
+                        <span class="char-count" id="charCounter">0자</span>
                     </div>
-                </div>
 
-                <!-- Quick Emotion Chips (Optional Prompts) -->
-                <div class="prompt-chips">
-                    <span class="chip-label">💡 추천 키워드:</span>
-                    <button type="button" class="chip-btn" data-text="오늘 정말 보람차고 기분 좋은 하루였어. ">😊 기쁨</button>
-                    <button type="button" class="chip-btn" data-text="조금 피곤하고 마음이 지친 날이었어. ">😮‍💨 피로</button>
-                    <button type="button" class="chip-btn" data-text="앞으로의 일 때문에 마음이 불안하고 걱정돼. ">😟 불안</button>
-                    <button type="button" class="chip-btn" data-text="주변 사람들에게 감사함을 깊이 느낀 하루야. ">🥰 감사</button>
-                    <button type="button" class="chip-btn" data-text="혼자 조용히 생각에 잠기는 평온한 날이었어. ">🌿 평온</button>
-                </div>
+                    <div class="textarea-wrapper">
+                        <textarea id="diaryInput"
+                            placeholder="오늘 있었던 일, 느꼈던 감정을 자유롭게 적어보세요. (예: 오늘 프로젝트 발표가 끝나서 홀가분하면서도 살짝 아쉬웠다.)"
+                            rows="7"></textarea>
 
-                <!-- Action Buttons Area -->
-                <div class="button-group">
-                    <button type="button" class="btn btn-voice" id="voiceBtn">
-                        <span class="btn-icon">🎙️</span>
-                        <span class="btn-text" id="voiceBtnText">음성으로 입력하기</span>
-                    </button>
-
-                    <button type="button" class="btn btn-analyze" id="analyzeBtn">
-                        <span class="btn-icon">✨</span>
-                        <span class="btn-text">분석 요청하기</span>
-                    </button>
-                </div>
-            </section>
-
-            <hr class="divider">
-
-            <!-- Result Section -->
-            <section class="result-section">
-                <div class="result-header">
-                    <h2 class="result-title">
-                        <span class="title-icon">🤖</span> 시의 답변 (AI의 답변)
-                    </h2>
-                    <span class="status-badge" id="aiStatusBadge">대기 중</span>
-                </div>
-
-                <!-- AI Response Gray Box Container -->
-                <div class="response-box" id="responseBox">
-                    <p class="placeholder-text" id="placeholderText">
-                        여기에 AI의 답변이 표시됩니다.
-                    </p>
-
-                    <!-- Dynamic Content Container (Hidden initially) -->
-                    <div class="response-content" id="responseContent" style="display: none;">
-                        <!-- Emotion Tags -->
-                        <div class="emotion-summary" id="emotionSummary">
-                            <span class="emotion-pill" id="primaryEmotionPill">감정: 분석 완료</span>
-                            <span class="score-pill" id="scorePill">마음 에너지: 85%</span>
-                        </div>
-
-                        <!-- AI Main Response Text -->
-                        <div class="ai-text-body" id="aiTextBody">
-                            <!-- Filled dynamically -->
-                        </div>
-
-                        <!-- Warm Quote / Advice Card -->
-                        <div class="quote-box" id="quoteBox">
-                            <span class="quote-mark">“</span>
-                            <span id="quoteText">오늘 하루도 정말 수고 많으셨어요. 당신의 노력은 결코 헛되지 않습니다.</span>
-                        </div>
-
-                        <!-- Recommended Healing -->
-                        <div class="recommendation-card" id="recommendationCard">
-                            <div class="rec-header">🌱 오늘의 추천 힐링</div>
-                            <div class="rec-detail" id="recDetail">따뜻한 차 한 잔과 함께 깊은 숨을 내쉬어 보세요.</div>
+                        <!-- Voice Mic Active Banner -->
+                        <div class="voice-status" id="voiceStatus" style="display: none;">
+                            <span class="mic-wave"></span>
+                            <span id="voiceStatusText">음성을 듣고 있습니다... 말씀해 주세요!</span>
                         </div>
                     </div>
+
+                    <!-- Quick Emotion Chips (Optional Prompts) -->
+                    <div class="prompt-chips">
+                        <span class="chip-label">💡 추천 키워드:</span>
+                        <button type="button" class="chip-btn" data-text="오늘 정말 보람차고 기분 좋은 하루였어. ">😊 기쁨</button>
+                        <button type="button" class="chip-btn" data-text="조금 피곤하고 마음이 지친 날이었어. ">😮‍💨 피로</button>
+                        <button type="button" class="chip-btn" data-text="앞으로의 일 때문에 마음이 불안하고 걱정돼. ">😟 불안</button>
+                        <button type="button" class="chip-btn" data-text="주변 사람들에게 감사함을 깊이 느낀 하루야. ">🥰 감사</button>
+                        <button type="button" class="chip-btn" data-text="혼자 조용히 생각에 잠기는 평온한 날이었어. ">🌿 평온</button>
+                    </div>
+
+                    <!-- Action Buttons Area -->
+                    <div class="button-group">
+                        <button type="button" class="btn btn-voice" id="voiceBtn">
+                            <span class="btn-icon">🎙️</span>
+                            <span class="btn-text" id="voiceBtnText">음성으로 입력하기</span>
+                        </button>
+
+                        <button type="button" class="btn btn-analyze" id="analyzeBtn">
+                            <span class="btn-icon">✨</span>
+                            <span class="btn-text">분석 요청하기</span>
+                        </button>
+                    </div>
+                </section>
+
+                <hr class="divider">
+
+                <!-- Result Section -->
+                <section class="result-section">
+                    <div class="result-header">
+                        <h2 class="result-title">
+                            <span class="title-icon">🤖</span> 시의 답변 (AI의 답변)
+                        </h2>
+                        <span class="status-badge" id="aiStatusBadge">대기 중</span>
+                    </div>
+
+                    <!-- AI Response Gray Box Container -->
+                    <div class="response-box" id="responseBox">
+                        <p class="placeholder-text" id="placeholderText">
+                            여기에 AI의 답변이 표시됩니다.
+                        </p>
+
+                        <!-- Dynamic Content Container (Hidden initially) -->
+                        <div class="response-content" id="responseContent" style="display: none;">
+                            <!-- Emotion Tags -->
+                            <div class="emotion-summary" id="emotionSummary">
+                                <span class="emotion-pill" id="primaryEmotionPill">감정: 분석 완료</span>
+                                <span class="score-pill" id="scorePill">마음 에너지: 85%</span>
+                            </div>
+
+                            <!-- AI Main Response Text -->
+                            <div class="ai-text-body" id="aiTextBody">
+                                <!-- Filled dynamically -->
+                            </div>
+
+                            <!-- Warm Quote / Advice Card -->
+                            <div class="quote-box" id="quoteBox">
+                                <span class="quote-mark">“</span>
+                                <span id="quoteText">오늘 하루도 정말 수고 많으셨어요. 당신의 노력은 결코 헛되지 않습니다.</span>
+                            </div>
+
+                            <!-- Recommended Healing -->
+                            <div class="recommendation-card" id="recommendationCard">
+                                <div class="rec-header">🌱 오늘의 추천 힐링</div>
+                                <div class="rec-detail" id="recDetail">따뜻한 차 한 잔과 함께 깊은 숨을 내쉬어 보세요.</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <!-- Past Entries History Container -->
+            <section class="history-container" id="historySection" style="display: none;">
+                <div class="history-header">
+                    <h3>📚 나의 일기 기록 (<span id="historyCount">0</span>)</h3>
+                    <button type="button" class="btn-clear-history" id="clearHistoryBtn">전체 삭제</button>
+                </div>
+                <div class="history-list" id="historyList">
+                    <!-- Dynamically populated past diaries -->
                 </div>
             </section>
-        </main>
-
-        <!-- Past Entries History Container -->
-        <section class="history-container" id="historySection" style="display: none;">
-            <div class="history-header">
-                <h3>📚 나의 일기 기록 (<span id="historyCount">0</span>)</h3>
-                <button type="button" class="btn-clear-history" id="clearHistoryBtn">전체 삭제</button>
-            </div>
-            <div class="history-list" id="historyList">
-                <!-- Dynamically populated past diaries -->
-            </div>
-        </section>
+        </div>
 
         <!-- Footer -->
         <footer class="app-footer">
