@@ -574,16 +574,16 @@ textarea:focus {
     color: #065f46;
 }
 
-/* History Section */
+/* History Section Below AI Response Box */
 .history-container {
     background: #ffffff;
     border: 1.5px solid var(--border-color);
     border-radius: var(--radius-lg);
-    padding: 24px;
+    padding: 28px;
     box-shadow: var(--shadow-soft);
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 18px;
 }
 
 .history-header {
@@ -593,9 +593,10 @@ textarea:focus {
 }
 
 .history-header h3 {
-    font-size: 1.05rem;
+    font-size: 1.15rem;
     color: #0f172a;
     font-weight: 800;
+    letter-spacing: -0.3px;
 }
 
 .btn-clear-history {
@@ -615,49 +616,94 @@ textarea:focus {
 .history-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    max-height: 250px;
+    gap: 16px;
+    max-height: 480px;
     overflow-y: auto;
+    padding-right: 4px;
 }
 
+/* Individual History Entry Card */
 .history-item {
     background: #f8fafc;
     border: 1.5px solid var(--border-color);
     border-radius: var(--radius-sm);
-    padding: 14px 18px;
+    padding: 18px 20px;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 12px;
+    transition: var(--transition-fast);
+}
+
+.history-item:hover {
+    border-color: var(--border-dark);
+    background: #ffffff;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
 .history-item-top {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    border-bottom: 1px dashed #e2e8f0;
+    padding-bottom: 8px;
 }
 
 .history-item-date {
-    font-size: 0.82rem;
+    font-size: 0.84rem;
     color: var(--text-muted);
-    font-weight: 600;
+    font-weight: 700;
 }
 
 .history-item-emotion {
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 800;
-    padding: 3px 10px;
+    padding: 3px 12px;
     border-radius: var(--radius-sm);
     background: #e0e7ff;
     color: #4338ca;
+    border: 1px solid #c7d2fe;
 }
 
-.history-item-text {
-    font-size: 0.92rem;
-    color: #334155;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+.history-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.history-section-box {
+    padding: 12px 14px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.history-original-box {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+}
+
+.history-ai-box {
+    background: #f1f5f9;
+    border-left: 3.5px solid var(--accent-indigo);
+    border-top: 1px solid #e2e8f0;
+    border-right: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.history-box-label {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.history-box-text {
+    font-size: 0.95rem;
+    color: #1e293b;
+    line-height: 1.6;
+    white-space: pre-line;
 }
 
 /* Footer */

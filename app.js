@@ -504,53 +504,116 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /* ==========================================================================
-       5. History Storage & rendering
+       5. Serverless Redis History Fetching & Card Rendering
        ========================================================================== */
-    function saveToHistory(text, result) {
-        const newEntry = {
-            id: Date.now(),
-            date: new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-            text: text,
-            emotion: result.emotionName,
-            aiSummary: result.quote
-        };
+    async function loadHistoryFromRedis() {
+        try {
+            let response = await fetch('/api/history').catch(() => null);
+            if (!response || !response.ok) {
+                response = await fetch('/api/history.js').catch(() => null);
+            }
 
-        historyData.unshift(newEntry);
-        if (historyData.length > 20) historyData.pop(); // keep last 20
+            if (!response || !response.ok) {
+                renderHistoryFromLocalStorage();
+                return;
+            }
 
-        localStorage.setItem('ai_diary_history', JSON.stringify(historyData));
-        renderHistory();
+            const data = await response.json().catch(() => ({}));
+            if (data.success && Array.isArray(data.history) && data.history.length > 0) {
+                renderHistoryCards(data.history);
+            } else {
+                renderHistoryFromLocalStorage();
+            }
+        } catch (err) {
+            console.warn('Redis 히스토리 API 호출 중 오류:', err);
+            renderHistoryFromLocalStorage();
+        }
     }
 
-    function renderHistory() {
-        if (historyData.length === 0) {
+    function renderHistoryCards(items) {
+        if (!items || items.length === 0) {
             historySection.style.display = 'none';
             return;
         }
 
         historySection.style.display = 'flex';
-        historyCount.textContent = historyData.length;
+        historyCount.textContent = items.length;
         historyList.innerHTML = '';
 
-        historyData.forEach(item => {
+        items.forEach(item => {
+            const dateStr = item.timestamp 
+                ? new Date(item.timestamp).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : (item.date || '이전 기록');
+
+            const diaryText = item.originalText || item.text || '(작성된 일기 내용 없음)';
+            const aiText = item.aiResponse || item.aiSummary || '(AI 답변 없음)';
+
+            // Parse emotion tag from aiResponse
+            let emotionName = item.emotion || '감정 분석';
+            const emotionMatch = aiText.match(/감정:\s*([^\n]+)/);
+            if (emotionMatch && emotionMatch[1]) {
+                emotionName = emotionMatch[1].trim();
+            }
+
             const div = document.createElement('div');
             div.className = 'history-item';
             div.innerHTML = `
                 <div class="history-item-top">
-                    <span class="history-item-date">📅 ${item.date}</span>
-                    <span class="history-item-emotion">${item.emotion}</span>
+                    <span class="history-item-date">📅 ${dateStr}</span>
+                    <span class="history-item-emotion">${escapeHtml(emotionName)}</span>
                 </div>
-                <div class="history-item-text">"${item.text}"</div>
+                <div class="history-card-body">
+                    <div class="history-section-box history-original-box">
+                        <span class="history-box-label">📝 작성 일기</span>
+                        <p class="history-box-text">${escapeHtml(diaryText)}</p>
+                    </div>
+                    <div class="history-section-box history-ai-box">
+                        <span class="history-box-label">🤖 AI 공감 답변</span>
+                        <p class="history-box-text">${escapeHtml(aiText)}</p>
+                    </div>
+                </div>
             `;
             historyList.appendChild(div);
         });
+    }
+
+    function renderHistoryFromLocalStorage() {
+        const localItems = JSON.parse(localStorage.getItem('ai_diary_history') || '[]');
+        renderHistoryCards(localItems);
+    }
+
+    function saveToHistory(text, result) {
+        const newEntry = {
+            id: Date.now(),
+            timestamp: new Date().toISOString(),
+            originalText: text,
+            aiResponse: typeof result === 'string' ? result : (result.aiText || result.quote || ''),
+            emotion: typeof result === 'object' ? (result.emotionName || '감정 기록') : '감정 기록'
+        };
+
+        historyData.unshift(newEntry);
+        if (historyData.length > 20) historyData.pop();
+
+        localStorage.setItem('ai_diary_history', JSON.stringify(historyData));
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     clearHistoryBtn.addEventListener('click', () => {
         if (confirm('저장된 일기 기록을 모두 삭제하시겠습니까?')) {
             historyData = [];
             localStorage.removeItem('ai_diary_history');
-            renderHistory();
+            renderHistoryCards([]);
         }
     });
+
+    // Load history on page load
+    loadHistoryFromRedis();
 });
