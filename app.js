@@ -880,11 +880,21 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadChatHistoryFromSupabase() {
         if (!supabase) return;
         try {
-            const { data, error } = await supabase
-                .from('messages')
+            let { data, error } = await supabase
+                .from('massages')
                 .select('*')
                 .order('created_at', { ascending: true })
                 .limit(50);
+
+            if (error && error.code === 'PGRST205') {
+                const res2 = await supabase
+                    .from('messages')
+                    .select('*')
+                    .order('created_at', { ascending: true })
+                    .limit(50);
+                data = res2.data;
+                error = res2.error;
+            }
 
             if (!error && Array.isArray(data)) {
                 data.forEach(row => {
@@ -892,13 +902,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         id: row.id,
                         userId: row.user_id,
                         email: row.user_email,
-                        message: row.content,
+                        message: row.content || row.conent || '',
                         timestamp: row.created_at
                     });
                 });
             }
         } catch (e) {
-            console.warn('Supabase messages 과거 내역 조회 실패:', e);
+            console.warn('Supabase 메시지 과거 내역 조회 실패:', e);
         }
     }
 
@@ -930,7 +940,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Load existing chat history from Supabase 'messages' table
+        // Load existing chat history from Supabase table
         loadChatHistoryFromSupabase();
     }
 
@@ -949,9 +959,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (chatSendBtn) chatSendBtn.disabled = true;
 
-            // 1. Insert new row into Supabase 'messages' table
-            const { data, error } = await supabase
-                .from('messages')
+            // 1. Try inserting into Supabase 'massages' table (or fallback 'messages')
+            let { error } = await supabase
+                .from('massages')
                 .insert([
                     {
                         content: text,
@@ -959,12 +969,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 ]);
 
+            if (error && error.code === 'PGRST205') {
+                const res2 = await supabase
+                    .from('messages')
+                    .insert([
+                        {
+                            content: text,
+                            user_email: user.email
+                        }
+                    ]);
+                error = res2.error;
+            }
+
             if (chatSendBtn) chatSendBtn.disabled = false;
 
             if (error) {
-                console.error('Supabase messages 테이블 insert 오류:', error.message);
-                // If table is not created yet or RLS policy warning
-                showAuthMessage(`[messages 테이블 오류] ${error.message}`);
+                console.error('Supabase DB insert 오류:', error.message);
+                showAuthMessage(`[DB 저장 오류] ${error.message}`);
             }
 
             // 2. Clear input box on message send attempt
