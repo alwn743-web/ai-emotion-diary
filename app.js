@@ -875,8 +875,33 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     /* ==========================================================================
-       6. Supabase Realtime Broadcast Chat
+       6. Supabase Messages Table & Realtime Broadcast Chat
        ========================================================================== */
+    async function loadChatHistoryFromSupabase() {
+        if (!supabase) return;
+        try {
+            const { data, error } = await supabase
+                .from('messages')
+                .select('*')
+                .order('created_at', { ascending: true })
+                .limit(50);
+
+            if (!error && Array.isArray(data)) {
+                data.forEach(row => {
+                    appendChatMessage({
+                        id: row.id,
+                        userId: row.user_id,
+                        email: row.user_email,
+                        message: row.content,
+                        timestamp: row.created_at
+                    });
+                });
+            }
+        } catch (e) {
+            console.warn('Supabase messages 과거 내역 조회 실패:', e);
+        }
+    }
+
     function initRealtimeChat(user) {
         if (!supabase || !user) return;
 
@@ -904,35 +929,66 @@ document.addEventListener('DOMContentLoaded', () => {
                 onlineBadge.textContent = '🔌 연결 대기 중';
             }
         });
+
+        // Load existing chat history from Supabase 'messages' table
+        loadChatHistoryFromSupabase();
     }
 
     async function sendChatMessage() {
         if (!chatInput) return;
         const text = chatInput.value.trim();
-        if (!text || !supabase || !chatChannel) return;
+        if (!text || !supabase) return;
 
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const user = session?.user;
-            if (!user) return;
+            if (!user) {
+                alert('로그인이 필요한 서비스입니다.');
+                return;
+            }
 
-            const msgPayload = {
-                id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-                userId: user.id,
-                email: user.email || '익명 사용자',
-                message: text,
-                timestamp: new Date().toISOString()
-            };
+            if (chatSendBtn) chatSendBtn.disabled = true;
 
-            await chatChannel.send({
-                type: 'broadcast',
-                event: 'chat-msg',
-                payload: msgPayload
-            });
+            // 1. Insert new row into Supabase 'messages' table
+            const { data, error } = await supabase
+                .from('messages')
+                .insert([
+                    {
+                        content: text,
+                        user_email: user.email
+                    }
+                ]);
 
+            if (chatSendBtn) chatSendBtn.disabled = false;
+
+            if (error) {
+                console.error('Supabase messages 테이블 insert 오류:', error.message);
+                // If table is not created yet or RLS policy warning
+                showAuthMessage(`[messages 테이블 오류] ${error.message}`);
+            }
+
+            // 2. Clear input box on message send attempt
             chatInput.value = '';
+
+            // 3. Broadcast message to all connected clients in real time
+            if (chatChannel) {
+                const msgPayload = {
+                    id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                    userId: user.id,
+                    email: user.email || '익명 사용자',
+                    message: text,
+                    timestamp: new Date().toISOString()
+                };
+
+                await chatChannel.send({
+                    type: 'broadcast',
+                    event: 'chat-msg',
+                    payload: msgPayload
+                });
+            }
         } catch (err) {
-            console.warn('채팅 메시지 전송 실패:', err);
+            if (chatSendBtn) chatSendBtn.disabled = false;
+            console.warn('채팅 메시지 전송 예외:', err);
         }
     }
 
