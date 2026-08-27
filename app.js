@@ -520,7 +520,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await response.json().catch(() => ({}));
             if (data.success && Array.isArray(data.history) && data.history.length > 0) {
-                renderHistoryCards(data.history);
+                const items = data.history;
+                renderHistoryCards(items);
+
+                // Auto-populate latest entry from Serverless Redis into main view on any device
+                const latestEntry = items[0];
+                if (latestEntry) {
+                    if (latestEntry.originalText && (!diaryInput.value || diaryInput.value.trim() === '')) {
+                        diaryInput.value = latestEntry.originalText;
+                        charCounter.textContent = `${latestEntry.originalText.length}자`;
+                    }
+                    if (latestEntry.aiResponse && !responseBox.classList.contains('has-content')) {
+                        displayGeminiResponse(latestEntry.aiResponse, latestEntry.originalText || '', false);
+                    }
+                }
             } else {
                 renderHistoryFromLocalStorage();
             }
