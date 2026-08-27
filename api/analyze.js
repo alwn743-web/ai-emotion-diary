@@ -8,6 +8,9 @@ import Redis from 'ioredis';
 import { Redis as UpstashRedis } from '@upstash/redis';
 import { createClient } from '@supabase/supabase-js';
 
+const DEFAULT_SUPABASE_URL = "https://wgimzugbofgqvxqityol.supabase.co";
+const DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndnaW16dWdib2ZncXZ4cWl0eW9sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc4MDg4MDksImV4cCI6MjEwMzM4NDgwOX0.sinvnUVw0AHwR5vb5VxRREaHgLgusZWQvENjflQdZec";
+
 export default async function handler(req, res) {
     // Enable CORS headers
     res.setHeader('Access-Control-Allow-Credentials', true);
@@ -41,15 +44,8 @@ export default async function handler(req, res) {
             });
         }
 
-        const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-        if (!supabaseUrl || !supabaseKey) {
-            return res.status(500).json({
-                success: false,
-                error: '서버에 Supabase 설정 환경변수(SUPABASE_URL / SUPABASE_ANON_KEY)가 부족합니다.'
-            });
-        }
+        const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_KEY;
 
         const supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
             auth: { persistSession: false }
