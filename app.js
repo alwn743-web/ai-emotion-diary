@@ -50,6 +50,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearHistoryBtn = document.getElementById('clearHistoryBtn');
     const currentDateText = document.getElementById('currentDateText');
 
+    // Realtime Chat UI Elements
+    const chatSection = document.getElementById('chatSection');
+    const chatMessagesContainer = document.getElementById('chatMessagesContainer');
+    const chatMessagesList = document.getElementById('chatMessagesList');
+    const chatForm = document.getElementById('chatForm');
+    const chatInput = document.getElementById('chatInput');
+    const chatSendBtn = document.getElementById('chatSendBtn');
+    let chatChannel = null;
+
     // State Variables
     let isRecording = false;
     let recognition = null;
@@ -71,12 +80,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Load user-isolated history from Serverless Redis
             loadHistoryFromRedis();
+
+            // Initialize Supabase Realtime Broadcast Chat
+            initRealtimeChat(session.user);
         } else {
             currentUserId = null;
             authCard.style.display = 'flex';
             mainDiaryApp.style.display = 'none';
             historySection.style.display = 'none';
             historyList.innerHTML = '';
+            if (chatChannel && supabase) {
+                supabase.removeChannel(chatChannel);
+                chatChannel = null;
+            }
         }
     }
 
@@ -857,6 +873,108 @@ document.addEventListener('DOMContentLoaded', () => {
             renderHistoryCards([]);
         }
     });
+
+    /* ==========================================================================
+       6. Supabase Realtime Broadcast Chat
+       ========================================================================== */
+    function initRealtimeChat(user) {
+        if (!supabase || !user) return;
+
+        if (chatChannel) {
+            supabase.removeChannel(chatChannel);
+            chatChannel = null;
+        }
+
+        // Subscribe to Supabase Realtime Broadcast Channel
+        chatChannel = supabase.channel('global-emotion-chat', {
+            config: { broadcast: { self: true } }
+        });
+
+        chatChannel.on('broadcast', { event: 'chat-msg' }, (payload) => {
+            if (payload && payload.payload) {
+                appendChatMessage(payload.payload, user.id);
+            }
+        });
+
+        chatChannel.subscribe((status) => {
+            const onlineBadge = document.getElementById('chatOnlineBadge');
+            if (status === 'SUBSCRIBED') {
+                if (onlineBadge) onlineBadge.textContent = '⚡ 실시간 연결됨';
+            } else if (onlineBadge) {
+                onlineBadge.textContent = '🔌 연결 대기 중';
+            }
+        });
+    }
+
+    async function sendChatMessage() {
+        if (!chatInput) return;
+        const text = chatInput.value.trim();
+        if (!text || !supabase || !chatChannel) return;
+
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const user = session?.user;
+            if (!user) return;
+
+            const msgPayload = {
+                id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+                userId: user.id,
+                email: user.email || '익명 사용자',
+                message: text,
+                timestamp: new Date().toISOString()
+            };
+
+            await chatChannel.send({
+                type: 'broadcast',
+                event: 'chat-msg',
+                payload: msgPayload
+            });
+
+            chatInput.value = '';
+        } catch (err) {
+            console.warn('채팅 메시지 전송 실패:', err);
+        }
+    }
+
+    function appendChatMessage(msgData, myUserId) {
+        if (!msgData || !msgData.message || !chatMessagesList) return;
+
+        const isMine = (msgData.userId === (myUserId || currentUserId));
+
+        const dateStr = msgData.timestamp 
+            ? new Date(msgData.timestamp).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
+            : '';
+
+        const senderEmail = msgData.email ? msgData.email.split('@')[0] + '***' : '익명';
+
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `chat-msg ${isMine ? 'mine' : 'other'}`;
+        
+        msgDiv.innerHTML = `
+            ${!isMine ? `<div class="chat-msg-sender">👤 ${escapeHtml(senderEmail)}</div>` : ''}
+            <div class="chat-msg-bubble">${escapeHtml(msgData.message)}</div>
+            <div class="chat-msg-time">${dateStr}</div>
+        `;
+
+        chatMessagesList.appendChild(msgDiv);
+        if (chatMessagesContainer) {
+            chatMessagesContainer.scrollTop = chatMessagesContainer.scrollHeight;
+        }
+    }
+
+    if (chatForm) {
+        chatForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            sendChatMessage();
+        });
+    }
+
+    if (chatSendBtn) {
+        chatSendBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            sendChatMessage();
+        });
+    }
 
     // Load history on page load
     loadHistoryFromRedis();

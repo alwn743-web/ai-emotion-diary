@@ -201,6 +201,24 @@
                     <!-- Dynamically populated past diaries -->
                 </div>
             </section>
+
+            <!-- Realtime Chat Section -->
+            <section class="chat-container" id="chatSection">
+                <div class="chat-header">
+                    <h3>💬 실시간 채팅</h3>
+                    <span class="chat-online-badge" id="chatOnlineBadge">⚡ 실시간 연결됨</span>
+                </div>
+                <div class="chat-messages-container" id="chatMessagesContainer">
+                    <div class="chat-messages-list" id="chatMessagesList">
+                        <!-- Dynamically populated chat message bubbles -->
+                        <div class="chat-system-msg">💬 감정을 나누는 실시간 대화 공간에 입장하셨습니다.</div>
+                    </div>
+                </div>
+                <form class="chat-input-wrapper" id="chatForm" onsubmit="return false;">
+                    <input type="text" id="chatInput" class="chat-input" placeholder="메시지를 입력하세요..." autocomplete="off">
+                    <button type="submit" class="btn btn-chat-send" id="chatSendBtn">전송</button>
+                </form>
+            </section>
         </div>
 
         <!-- Footer -->
