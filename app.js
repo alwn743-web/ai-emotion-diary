@@ -59,6 +59,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const chatMessagesList = document.getElementById('chatMessagesList');
     const chatForm = document.getElementById('chatForm');
     const chatInput = document.getElementById('chatInput');
+    const chatClipBtn = document.getElementById('chatClipBtn');
+    const chatImageFileInput = document.getElementById('chatImageFileInput');
     const chatSendBtn = document.getElementById('chatSendBtn');
     let chatChannel = null;
 
@@ -980,9 +982,9 @@ document.addEventListener('DOMContentLoaded', () => {
         loadChatHistoryFromSupabase();
     }
 
-    async function sendChatMessage() {
-        if (!chatInput) return;
-        const text = chatInput.value.trim();
+    async function sendChatMessage(customText) {
+        if (!chatInput && !customText) return;
+        const text = customText !== undefined ? customText : chatInput.value.trim();
         if (!text || !supabase) return;
 
         try {
@@ -1024,15 +1026,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 showAuthMessage(`[DB 저장 오류] ${error.message}`);
             }
 
-            // 2. Clear input box on message send attempt
-            chatInput.value = '';
+            // 2. Clear input box if customText was not passed
+            if (customText === undefined && chatInput) {
+                chatInput.value = '';
+            }
 
             // 3. Broadcast message to connected clients
             if (chatChannel) {
+                const currentAvatarUrl = (user.user_metadata && user.user_metadata.avatar_url) 
+                    || localStorage.getItem(`user_avatar_${user.id}`) 
+                    || 'assets/hello_kitty.jpg';
+
                 const msgPayload = {
                     id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
                     userId: user.id,
                     email: user.email || '익명 사용자',
+                    avatarUrl: currentAvatarUrl,
                     message: text,
                     timestamp: new Date().toISOString()
                 };
@@ -1047,6 +1056,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (chatSendBtn) chatSendBtn.disabled = false;
             console.warn('채팅 메시지 전송 예외:', err);
         }
+    }
+
+    function formatMessageContent(text) {
+        if (!text) return '';
+        if (typeof text === 'string' && text.startsWith('![이미지](') && text.endsWith(')')) {
+            const imgUrl = text.substring(8, text.length - 1);
+            return `<img src="${escapeHtml(imgUrl)}" class="chat-attached-img" alt="첨부 이미지">`;
+        }
+        return escapeHtml(text);
     }
 
     function appendChatMessage(msgData, myUserId) {
@@ -1076,7 +1094,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <img class="chat-msg-avatar" src="${escapeHtml(avatarUrl)}" onerror="this.src='assets/hello_kitty.jpg'" alt="프로필">
                 <span>${isMine ? '나' : escapeHtml(fullEmail)}</span>
             </div>
-            <div class="chat-msg-bubble">${escapeHtml(messageText)}</div>
+            <div class="chat-msg-bubble">${formatMessageContent(messageText)}</div>
             <div class="chat-msg-time">${dateStr}</div>
         `;
 
@@ -1090,6 +1108,49 @@ document.addEventListener('DOMContentLoaded', () => {
         chatForm.addEventListener('submit', (e) => {
             e.preventDefault();
             sendChatMessage();
+        });
+    }
+
+    // Clip Icon Button -> Select Chat Image File
+    if (chatClipBtn) {
+        chatClipBtn.addEventListener('click', () => {
+            if (chatImageFileInput) chatImageFileInput.click();
+        });
+    }
+
+    if (chatImageFileInput) {
+        chatImageFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files?.[0];
+            if (!file || !supabase || !currentUserId) return;
+
+            const fileExt = file.name.split('.').pop() || 'png';
+            const filePath = `${currentUserId}/chat_${Date.now()}.${fileExt}`;
+
+            try {
+                if (chatClipBtn) chatClipBtn.disabled = true;
+
+                const { data, error } = await supabase.storage
+                    .from('chat-images')
+                    .upload(filePath, file, { upsert: true });
+
+                if (chatClipBtn) chatClipBtn.disabled = false;
+
+                if (!error) {
+                    const { data: { publicUrl } } = supabase.storage
+                        .from('chat-images')
+                        .getPublicUrl(filePath);
+
+                    if (publicUrl) {
+                        await sendChatMessage(`![이미지](${publicUrl})`);
+                    }
+                } else {
+                    console.warn('Supabase chat-images storage upload error:', error.message);
+                    showAuthMessage(`[이미지 첨부 오류] ${error.message}`);
+                }
+            } catch (err) {
+                if (chatClipBtn) chatClipBtn.disabled = false;
+                console.warn('chat-images storage exception:', err);
+            }
         });
     }
 

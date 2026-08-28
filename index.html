@@ -226,7 +226,17 @@
                 </div>
                 <form class="chat-input-wrapper" id="chatForm" onsubmit="return false;">
                     <input type="text" id="chatInput" class="chat-input" placeholder="메시지를 입력하세요..." autocomplete="off">
-                    <button type="submit" class="btn btn-chat-send" id="chatSendBtn">전송</button>
+                    
+                    <!-- Paperclip Attachment Icon Button -->
+                    <button type="button" class="btn-chat-icon btn-chat-clip" id="chatClipBtn" title="이미지 파일 첨부">
+                        📎
+                    </button>
+                    <input type="file" id="chatImageFileInput" accept="image/*" style="display: none;">
+
+                    <!-- Icon Send Button -->
+                    <button type="submit" class="btn-chat-icon btn-chat-send" id="chatSendBtn" title="메시지 전송">
+                        🚀
+                    </button>
                 </form>
             </section>
         </div>
