@@ -1208,16 +1208,22 @@ textarea:focus {
 }
 
 .btn-chat-clip {
-    background: #ffffff;
-    border: 1.5px solid var(--border-color);
-    color: #475569;
+    background: #e0e7ff;
+    border: 1.5px solid #c7d2fe;
+    color: #4338ca;
 }
 
 .btn-chat-clip:hover {
-    background: #f1f5f9;
-    border-color: #cbd5e1;
-    color: var(--accent-indigo);
+    background: #c7d2fe;
+    border-color: #4338ca;
+    color: #3730a3;
     transform: translateY(-1px);
+}
+
+.btn-chat-clip svg {
+    stroke-width: 2.5px;
+    width: 22px;
+    height: 22px;
 }
 
 .btn-chat-send {
