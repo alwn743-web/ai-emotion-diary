@@ -1066,12 +1066,16 @@ document.addEventListener('DOMContentLoaded', () => {
             : '';
 
         const fullEmail = msgData.email || '익명 사용자';
+        const avatarUrl = msgData.avatarUrl || msgData.avatar_url || (isMine ? (userAvatarImg ? userAvatarImg.src : 'assets/hello_kitty.jpg') : 'assets/hello_kitty.jpg');
 
         const msgDiv = document.createElement('div');
         msgDiv.className = `chat-msg ${isMine ? 'mine' : 'other'}`;
         
         msgDiv.innerHTML = `
-            <div class="chat-msg-sender">${isMine ? '나' : `✉️ ${escapeHtml(fullEmail)}`}</div>
+            <div class="chat-msg-sender">
+                <img class="chat-msg-avatar" src="${escapeHtml(avatarUrl)}" onerror="this.src='assets/hello_kitty.jpg'" alt="프로필">
+                <span>${isMine ? '나' : escapeHtml(fullEmail)}</span>
+            </div>
             <div class="chat-msg-bubble">${escapeHtml(messageText)}</div>
             <div class="chat-msg-time">${dateStr}</div>
         `;
@@ -1109,21 +1113,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const file = e.target.files?.[0];
             if (!file) return;
 
-            // 1. Optimistic local image preview
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const dataUrl = event.target.result;
-                if (userAvatarImg) userAvatarImg.src = dataUrl;
-                if (currentUserId) {
-                    localStorage.setItem(`user_avatar_${currentUserId}`, dataUrl);
-                }
-            };
-            reader.readAsDataURL(file);
-
-            // 2. Upload image to Supabase Storage 'avatars' bucket
+            // ① Upload file to Supabase Storage 'avatars' bucket (path: user_id/avatar.png)
             if (supabase && currentUserId) {
                 const fileExt = file.name.split('.').pop() || 'png';
-                const filePath = `${currentUserId}/profile_${Date.now()}.${fileExt}`;
+                const filePath = `${currentUserId}/avatar.${fileExt}`;
 
                 try {
                     const { data, error } = await supabase.storage
@@ -1131,13 +1124,22 @@ document.addEventListener('DOMContentLoaded', () => {
                         .upload(filePath, file, { upsert: true });
 
                     if (!error) {
+                        // ② Get Public URL
                         const { data: { publicUrl } } = supabase.storage
                             .from('avatars')
                             .getPublicUrl(filePath);
 
-                        if (publicUrl && userAvatarImg) {
-                            userAvatarImg.src = publicUrl;
-                            localStorage.setItem(`user_avatar_${currentUserId}`, publicUrl);
+                        if (publicUrl) {
+                            const freshUrl = `${publicUrl}?t=${Date.now()}`;
+
+                            // ③ Save Public URL into Supabase Auth User Metadata (user_metadata.avatar_url)
+                            await supabase.auth.updateUser({
+                                data: { avatar_url: freshUrl }
+                            });
+
+                            // ④ Immediately update screen profile image
+                            if (userAvatarImg) userAvatarImg.src = freshUrl;
+                            localStorage.setItem(`user_avatar_${currentUserId}`, freshUrl);
                         }
                     } else {
                         console.warn('Supabase storage upload error:', error.message);

@@ -1110,10 +1110,23 @@ textarea:focus {
 }
 
 .chat-msg-sender {
-    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.76rem;
     font-weight: 700;
     color: #64748b;
-    margin-bottom: 2px;
+    margin-bottom: 3px;
+}
+
+.chat-msg-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1.5px solid #cbd5e1;
+    background: #ffffff;
+    flex-shrink: 0;
 }
 
 .chat-msg-bubble {
