@@ -1139,19 +1139,40 @@ textarea:focus {
 }
 
 .chat-img-wrapper {
-    margin-top: 4px;
+    margin-top: 2px;
     position: relative;
     max-width: 100%;
+    display: flex;
 }
 
 .chat-msg-bubble img.chat-attached-img {
-    max-width: 240px;
-    max-height: 240px;
+    width: auto;
+    height: auto;
+    max-width: 280px;
+    max-height: 380px;
     border-radius: var(--radius-sm);
     display: block;
-    object-fit: cover;
-    border: 1px solid rgba(0, 0, 0, 0.1);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    object-fit: contain; /* Keeps original aspect ratio and natural proportions */
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    background: #ffffff;
+    cursor: pointer;
+    transition: transform 0.18s ease;
+}
+
+.chat-msg-bubble img.chat-attached-img:hover {
+    transform: scale(1.02);
+}
+
+.chat-msg-bubble.has-image-bubble {
+    padding: 6px;
+    background: #ffffff !important;
+    border: 1.5px solid var(--border-color) !important;
+}
+
+.chat-msg.mine .chat-msg-bubble.has-image-bubble {
+    background: #ffffff !important;
+    border: 1.5px solid var(--accent-indigo) !important;
 }
 
 .chat-img-error {

@@ -1059,21 +1059,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatMessageContent(text) {
-        if (!text || typeof text !== 'string') return '';
+        if (!text || typeof text !== 'string') return { html: '', isImage: false };
 
         // Match markdown image syntax: ![image](URL), [image](URL), ![이미지](URL), [이미지](URL)
         const imgMatch = text.match(/^!?\[(?:image|이미지)\]\((.*?)\)$/i);
         if (imgMatch && imgMatch[1]) {
             const imgUrl = imgMatch[1].trim();
-            return `
-                <div class="chat-img-wrapper">
-                    <img src="${escapeHtml(imgUrl)}" class="chat-attached-img" alt="첨부 이미지" 
-                         onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'chat-img-error\'>⚠️ 이미지를 불러올 수 없습니다</div>';">
-                </div>
-            `;
+            return {
+                isImage: true,
+                html: `
+                    <div class="chat-img-wrapper">
+                        <img src="${escapeHtml(imgUrl)}" class="chat-attached-img" alt="첨부 이미지" 
+                             onclick="window.open('${escapeHtml(imgUrl)}', '_blank')"
+                             onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'chat-img-error\'>⚠️ 이미지를 불러올 수 없습니다</div>';">
+                    </div>
+                `
+            };
         }
 
-        return escapeHtml(text);
+        return { isImage: false, html: escapeHtml(text) };
     }
 
     function appendChatMessage(msgData, myUserId) {
@@ -1095,6 +1099,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const fullEmail = msgData.email || '익명 사용자';
         const avatarUrl = msgData.avatarUrl || msgData.avatar_url || (isMine ? (userAvatarImg ? userAvatarImg.src : 'assets/hello_kitty.jpg') : 'assets/hello_kitty.jpg');
 
+        const formatted = formatMessageContent(messageText);
+
         const msgDiv = document.createElement('div');
         msgDiv.className = `chat-msg ${isMine ? 'mine' : 'other'}`;
         
@@ -1103,7 +1109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <img class="chat-msg-avatar" src="${escapeHtml(avatarUrl)}" onerror="this.src='assets/hello_kitty.jpg'" alt="프로필">
                 <span>${isMine ? '나' : escapeHtml(fullEmail)}</span>
             </div>
-            <div class="chat-msg-bubble">${formatMessageContent(messageText)}</div>
+            <div class="chat-msg-bubble ${formatted.isImage ? 'has-image-bubble' : ''}">${formatted.html}</div>
             <div class="chat-msg-time">${dateStr}</div>
         `;
 
