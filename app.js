@@ -1059,11 +1059,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function formatMessageContent(text) {
-        if (!text) return '';
-        if (typeof text === 'string' && text.startsWith('![이미지](') && text.endsWith(')')) {
-            const imgUrl = text.substring(8, text.length - 1);
-            return `<img src="${escapeHtml(imgUrl)}" class="chat-attached-img" alt="첨부 이미지">`;
+        if (!text || typeof text !== 'string') return '';
+
+        // Match markdown image syntax: ![image](URL), [image](URL), ![이미지](URL), [이미지](URL)
+        const imgMatch = text.match(/^!?\[(?:image|이미지)\]\((.*?)\)$/i);
+        if (imgMatch && imgMatch[1]) {
+            const imgUrl = imgMatch[1].trim();
+            return `
+                <div class="chat-img-wrapper">
+                    <img src="${escapeHtml(imgUrl)}" class="chat-attached-img" alt="첨부 이미지" 
+                         onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'chat-img-error\'>⚠️ 이미지를 불러올 수 없습니다</div>';">
+                </div>
+            `;
         }
+
         return escapeHtml(text);
     }
 
@@ -1121,13 +1130,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (chatImageFileInput) {
         chatImageFileInput.addEventListener('change', async (e) => {
             const file = e.target.files?.[0];
-            if (!file || !supabase || !currentUserId) return;
-
-            const fileExt = file.name.split('.').pop() || 'png';
-            const filePath = `${currentUserId}/chat_${Date.now()}.${fileExt}`;
+            if (!file || !supabase) return;
 
             try {
+                const { data: { session } } = await supabase.auth.getSession();
+                const user = session?.user;
+                if (!user) {
+                    alert('로그인이 필요한 서비스입니다.');
+                    return;
+                }
+
                 if (chatClipBtn) chatClipBtn.disabled = true;
+
+                // 1. Upload image file to Supabase Storage 'chat-images' bucket
+                const fileExt = file.name.split('.').pop() || 'png';
+                const filePath = `${user.id}/chat_${Date.now()}_${Math.random().toString(36).substring(2, 6)}.${fileExt}`;
 
                 const { data, error } = await supabase.storage
                     .from('chat-images')
@@ -1135,21 +1152,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (chatClipBtn) chatClipBtn.disabled = false;
 
-                if (!error) {
-                    const { data: { publicUrl } } = supabase.storage
-                        .from('chat-images')
-                        .getPublicUrl(filePath);
-
-                    if (publicUrl) {
-                        await sendChatMessage(`![이미지](${publicUrl})`);
-                    }
-                } else {
-                    console.warn('Supabase chat-images storage upload error:', error.message);
-                    showAuthMessage(`[이미지 첨부 오류] ${error.message}`);
+                if (error) {
+                    console.error('Supabase chat-images storage upload error:', error.message);
+                    showAuthMessage(`[이미지 업로드 오류] ${error.message}`);
+                    return;
                 }
+
+                // 2. Get Public URL
+                const { data: { publicUrl } } = supabase.storage
+                    .from('chat-images')
+                    .getPublicUrl(filePath);
+
+                if (publicUrl) {
+                    // 3. Store formatted string ![image](URL) into DB & send to chat
+                    const formattedImageContent = `![image](${publicUrl})`;
+                    await sendChatMessage(formattedImageContent);
+                }
+
+                // Reset file input
+                chatImageFileInput.value = '';
+
             } catch (err) {
                 if (chatClipBtn) chatClipBtn.disabled = false;
-                console.warn('chat-images storage exception:', err);
+                console.warn('chat-images storage upload exception:', err);
             }
         });
     }
