@@ -204,6 +204,16 @@
 
             <!-- Realtime Chat Section -->
             <section class="chat-container" id="chatSection">
+                <!-- Chat Profile Header Section -->
+                <div class="chat-profile-section" id="chatProfileSection">
+                    <div class="avatar-img-wrapper" id="avatarClickArea" title="클릭하여 프로필 사진 변경">
+                        <img id="userAvatarImg" class="avatar-circle-img" src="assets/hello_kitty.jpg" alt="프로필 사진" onerror="this.src='assets/hello_kitty.jpg'">
+                        <div class="avatar-overlay">📷</div>
+                    </div>
+                    <button type="button" class="btn-change-photo" id="changePhotoBtn">사진 변경</button>
+                    <input type="file" id="avatarFileInput" accept="image/*" style="display: none;">
+                </div>
+
                 <div class="chat-header">
                     <h3>💬 실시간 채팅</h3>
                     <span class="chat-online-badge" id="chatOnlineBadge">⚡ 실시간 연결됨</span>

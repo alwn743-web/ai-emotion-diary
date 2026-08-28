@@ -47,8 +47,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const historySection = document.getElementById('historySection');
     const historyList = document.getElementById('historyList');
     const historyCount = document.getElementById('historyCount');
-    const clearHistoryBtn = document.getElementById('clearHistoryBtn');
-    const currentDateText = document.getElementById('currentDateText');
+    // Profile Avatar UI Elements
+    const avatarClickArea = document.getElementById('avatarClickArea');
+    const userAvatarImg = document.getElementById('userAvatarImg');
+    const changePhotoBtn = document.getElementById('changePhotoBtn');
+    const avatarFileInput = document.getElementById('avatarFileInput');
 
     // Realtime Chat UI Elements
     const chatSection = document.getElementById('chatSection');
@@ -75,6 +78,12 @@ document.addEventListener('DOMContentLoaded', () => {
             mainDiaryApp.style.display = 'flex';
             userEmailText.textContent = session.user.email || '로그인 사용자';
 
+            // Load user profile avatar image (or default Hello Kitty)
+            const savedAvatar = localStorage.getItem(`user_avatar_${session.user.id}`);
+            if (userAvatarImg) {
+                userAvatarImg.src = savedAvatar || 'assets/hello_kitty.jpg';
+            }
+
             // Restore user-scoped latest diary input and AI response
             restoreLatestEntry(session.user.id);
 
@@ -89,6 +98,9 @@ document.addEventListener('DOMContentLoaded', () => {
             mainDiaryApp.style.display = 'none';
             historySection.style.display = 'none';
             historyList.innerHTML = '';
+            if (userAvatarImg) {
+                userAvatarImg.src = 'assets/hello_kitty.jpg';
+            }
             if (chatChannel && supabase) {
                 supabase.removeChannel(chatChannel);
                 chatChannel = null;
@@ -1077,10 +1089,63 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (chatSendBtn) {
-        chatSendBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            sendChatMessage();
+    /* ==========================================================================
+       7. Profile Avatar Selection & Supabase Storage Upload
+       ========================================================================== */
+    if (avatarClickArea) {
+        avatarClickArea.addEventListener('click', () => {
+            if (avatarFileInput) avatarFileInput.click();
+        });
+    }
+
+    if (changePhotoBtn) {
+        changePhotoBtn.addEventListener('click', () => {
+            if (avatarFileInput) avatarFileInput.click();
+        });
+    }
+
+    if (avatarFileInput) {
+        avatarFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+
+            // 1. Optimistic local image preview
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const dataUrl = event.target.result;
+                if (userAvatarImg) userAvatarImg.src = dataUrl;
+                if (currentUserId) {
+                    localStorage.setItem(`user_avatar_${currentUserId}`, dataUrl);
+                }
+            };
+            reader.readAsDataURL(file);
+
+            // 2. Upload image to Supabase Storage 'avatars' bucket
+            if (supabase && currentUserId) {
+                const fileExt = file.name.split('.').pop() || 'png';
+                const filePath = `${currentUserId}/profile_${Date.now()}.${fileExt}`;
+
+                try {
+                    const { data, error } = await supabase.storage
+                        .from('avatars')
+                        .upload(filePath, file, { upsert: true });
+
+                    if (!error) {
+                        const { data: { publicUrl } } = supabase.storage
+                            .from('avatars')
+                            .getPublicUrl(filePath);
+
+                        if (publicUrl && userAvatarImg) {
+                            userAvatarImg.src = publicUrl;
+                            localStorage.setItem(`user_avatar_${currentUserId}`, publicUrl);
+                        }
+                    } else {
+                        console.warn('Supabase storage upload error:', error.message);
+                    }
+                } catch (err) {
+                    console.warn('Storage upload exception:', err);
+                }
+            }
         });
     }
 
